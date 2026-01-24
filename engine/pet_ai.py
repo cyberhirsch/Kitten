@@ -135,12 +135,12 @@ class PetAI:
 
     def choose_next_state(self, hungry):
         weights = {
-            State.IDLE: 30,
+            State.IDLE: 25,
             State.LOOK_SIDE: 15,
             State.WALK: 30,
             State.LICK: 10,
             State.CLEAN: 10,
-            State.SLEEP: 5
+            State.SLEEP: 10
         }
         
         if hungry:
@@ -153,8 +153,12 @@ class PetAI:
         probs = list(weights.values())
         next_s = random.choices(states, weights=probs)[0]
         
-        # Randomize direction
-        if next_s in [State.WALK, State.RUN]:
+        # Determine duration
+        duration = random.randint(2000, 5000)
+        if next_s == State.SLEEP:
+            # Nap can last up to 10 minutes (600,000 ms), minimum 30 seconds
+            duration = random.randint(30000, 600000)
+        elif next_s in [State.WALK, State.RUN]:
             self.direction = random.choice(["left", "right"])
             
-        self.set_state(next_s)
+        self.set_state(next_s, duration=duration)

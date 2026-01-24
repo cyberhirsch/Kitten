@@ -253,7 +253,8 @@ class DesktopPet(QMainWindow):
 
     def feed_pet(self):
         self.ai.last_fed = time.time()
-        self.ai.set_state(State.SLEEP, duration=10000)
+        # Food coma nap: 5 minutes
+        self.ai.set_state(State.SLEEP, duration=300000)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
