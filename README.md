@@ -16,7 +16,11 @@ Kitten Python is a lightweight desktop pet application built with Python and PyQ
 ## 🎮 How to Use
 
 ### Running the Executable
-Simply download and run `dist/KittenPet.exe`.
+If you don't want to build the project from source, you can buy the pre-built, ready-to-run version on itch.io:
+
+👉 **[Download on itch.io](https://cyberhirsch.itch.io/desktop-kitten-pet)**
+
+Otherwise, simply run the `dist/KittenPet.exe` after building it.
 
 ### Controls
 | Action | Control |

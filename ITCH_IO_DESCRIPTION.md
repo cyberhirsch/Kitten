@@ -29,4 +29,9 @@ Tired of working alone? Let this little feline keep you company. Unlike other de
 *   **Privacy First**: No internet connection required, no tracking—just a cat.
 
 ---
+
+### 💻 Open Source
+Want to peek under the hood? **Kitten Python** is open source! If you don't want to buy the pre-built version, you can download the source code and build the EXE yourself for free on **[GitHub](https://github.com/cyberhirsch/Kitten)**.
+
+---
 *Created for cat lovers, developers, and anyone who needs a little digital serotonin. Adopt your Kitten Python today!*
