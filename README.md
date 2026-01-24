@@ -20,7 +20,7 @@ If you don't want to build the project from source, you can buy the pre-built, r
 
 👉 **[Download on itch.io](https://cyberhirsch.itch.io/desktop-kitten-pet)**
 
-Otherwise, simply run the `dist/KittenPet.exe` after building it.
+Otherwise, simply run the `dist/DesktopKitten.exe` after building it.
 
 ### Controls
 | Action | Control |
