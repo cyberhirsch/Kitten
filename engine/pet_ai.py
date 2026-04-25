@@ -17,6 +17,10 @@ class State(Enum):
     EMOTE = auto()
     CARRY = auto()
 
+class BehaviorMode(Enum):
+    LAZY = auto()      # Always sleepy, never hungry
+    STANDARD = auto()  # Gets hungry and reminds user to take breaks (Work Timer)
+
 class PetAI:
     def __init__(self, start_x, start_y):
         self.x = start_x
@@ -43,23 +47,48 @@ class PetAI:
         self.run_speed = 4
         self.last_reaction_time = 0
         
-        # Lazy/Playful system
+        # Motivator system
+        self.work_start_time = 0
+        self.last_activity_time = 0
+        self.is_working = False
+        
+        # State & Behavior system
         self.awake_until = 0
         self.queued_state = None
+        self.mode = BehaviorMode.LAZY
         
     def is_hungry(self):
-        return False # No longer gets hungry and annoying
+        if self.mode == BehaviorMode.LAZY:
+            return False
+        return time.time() - self.last_fed > self.hunger_threshold
 
-    def update(self, delta_ms, virtual_rect, floors, mouse_pos=None):
+    def update(self, delta_ms, virtual_rect, floors, mouse_pos=None, last_input_time_ms=None):
         """
         Updates physics and AI state.
         virtual_rect: [left, top, right, bottom] of the entire virtual desktop
         floors: list of Y coordinates representing surfaces (window tops + screen bottoms)
         mouse_pos: (x, y) tuple of the global mouse position
+        last_input_time_ms: timestamp of last system input (mouse/kb)
         """
         self.anim_timer += delta_ms
         v_left, v_top, v_right, v_bottom = virtual_rect
         
+        now_ms = time.time() * 1000
+
+        # Motivator Logic Update (Standard mode only)
+        if self.mode == BehaviorMode.STANDARD and last_input_time_ms:
+            # Check if user is active
+            if last_input_time_ms > self.last_activity_time:
+                self.last_activity_time = last_input_time_ms
+                if not self.is_working:
+                    self.is_working = True
+                    self.work_start_time = now_ms
+            
+            # Reset logic: If idle for 5 minutes (300,000ms), stop working
+            if now_ms - self.last_activity_time > 300000:
+                self.is_working = False
+                self.work_start_time = 0
+
         # Hunger check
         hungry = self.is_hungry()
         speed_mult = 1.5 if hungry else 1.0
@@ -188,27 +217,61 @@ class PetAI:
         now = time.time() * 1000
         is_awake = now < self.awake_until
 
-        if is_awake:
-            # Playful/Active weights
-            weights = {
-                State.IDLE: 15,
-                State.LOOK_SIDE: 15,
-                State.WALK: 30,
-                State.RUN: 10,
-                State.LICK: 10,
-                State.CLEAN: 10,
-                State.PLAY: 10
-            }
+        if self.mode == BehaviorMode.LAZY:
+            if is_awake:
+                # Playful/Active weights
+                weights = {
+                    State.IDLE: 15,
+                    State.LOOK_SIDE: 15,
+                    State.WALK: 30,
+                    State.RUN: 10,
+                    State.LICK: 10,
+                    State.CLEAN: 10,
+                    State.PLAY: 10
+                }
+            else:
+                # Lazy/Sleepy weights
+                weights = {
+                    State.IDLE: 20,
+                    State.LOOK_SIDE: 5,
+                    State.WALK: 5,
+                    State.SLEEP: 60,
+                    State.LICK: 5,
+                    State.CLEAN: 5
+                }
+        elif self.mode == BehaviorMode.STANDARD:
+            hungry = self.is_hungry()
+            now = time.time() * 1000
+            work_duration = now - self.work_start_time if (self.is_working and self.work_start_time > 0) else 0
+            
+            # Motivator Phases (Combined with hunger)
+            # Phase 2: Running (50m+) or very hungry
+            if work_duration > 3000000 or (hungry and random.random() < 0.3): 
+                next_s = State.RUN
+                duration = random.randint(5000, 10000)
+            # Phase 1: Walking (45m+) or generally hungry
+            elif work_duration > 2700000 or hungry:
+                next_s = State.WALK
+                duration = random.randint(3000, 7000)
+            else:
+                # Normal behavior while working or just hanging out
+                weights = {
+                    State.IDLE: 25,
+                    State.LOOK_SIDE: 15,
+                    State.WALK: 30,
+                    State.LICK: 10,
+                    State.CLEAN: 10,
+                    State.SLEEP: 10 # Rare naps in standard mode
+                }
+                states = list(weights.keys())
+                probs = list(weights.values())
+                next_s = random.choices(states, weights=probs)[0]
+                duration = random.randint(2000, 5000)
+                if next_s == State.SLEEP:
+                    duration = random.randint(30000, 120000)
         else:
-            # Lazy/Sleepy weights
-            weights = {
-                State.IDLE: 20,
-                State.LOOK_SIDE: 5,
-                State.WALK: 5,
-                State.SLEEP: 60,
-                State.LICK: 5,
-                State.CLEAN: 5
-            }
+            # Fallback
+            weights = {State.IDLE: 100}
             
         states = list(weights.keys())
         probs = list(weights.values())

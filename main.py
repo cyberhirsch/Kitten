@@ -9,8 +9,9 @@ from PyQt6.QtCore import QUrl
 import ctypes
 
 from engine.sprite_engine import SpriteEngine
-from engine.pet_ai import PetAI, State
+from engine.pet_ai import PetAI, State, BehaviorMode
 from engine.window_helper import get_collidable_windows
+import json
 
 ANIMATIONS_CONFIG = {
     "IDLE":       {"row": 0, "frames": 4,  "speed": 200},
@@ -112,6 +113,9 @@ class DesktopPet(QMainWindow):
         self.timer.timeout.connect(self.game_loop)
         self.timer.start(30) # ~33 FPS
  
+        # Load saved settings
+        self.load_settings()
+        
         # Use a single shot timer to apply macOS-specific fixes after the window is fully realized
         if sys.platform == "darwin":
             QTimer.singleShot(500, self.apply_macos_fixes)
@@ -201,7 +205,8 @@ class DesktopPet(QMainWindow):
         
         # Update AI
         v_rect = [self.virtual_geo.left(), self.virtual_geo.top(), self.virtual_geo.right(), self.virtual_geo.bottom()]
-        self.ai.update(30, v_rect, self.collidable_floors, mouse_pos=mouse_tuple)
+        last_input_ms = self.get_last_input_time_ms()
+        self.ai.update(30, v_rect, self.collidable_floors, mouse_pos=mouse_tuple, last_input_time_ms=last_input_ms)
         
         # Sync window position
         if self.dragging:
@@ -373,15 +378,112 @@ class DesktopPet(QMainWindow):
         
         menu.addAction(feed_action)
         menu.addSeparator()
+
+        # Behavior Submenu
+        behavior_menu = menu.addMenu("Behavior")
+        
+        lazy_action = QAction("Lazy (Always Sleepy)", self)
+        lazy_action.setCheckable(True)
+        lazy_action.setChecked(self.ai.mode == BehaviorMode.LAZY)
+        lazy_action.triggered.connect(lambda checked: self.set_behavior_mode(BehaviorMode.LAZY))
+        
+        standard_action = QAction("Standard (Hunger & Break Reminders)", self)
+        standard_action.setCheckable(True)
+        standard_action.setChecked(self.ai.mode == BehaviorMode.STANDARD)
+        standard_action.triggered.connect(lambda checked: self.set_behavior_mode(BehaviorMode.STANDARD))
+        
+        behavior_menu.addAction(lazy_action)
+        behavior_menu.addAction(standard_action)
+
+        menu.addSeparator()
         menu.addAction(close_action)
-        menu.exec(pos)
+        try:
+            menu.exec(pos)
+        except Exception as e:
+            print(f"Context menu error: {e}")
+
+    def set_behavior_mode(self, mode):
+        self.ai.mode = mode
+        # If switching to lazy, maybe wake up briefly to show it changed
+        if mode == BehaviorMode.LAZY:
+            self.ai.wake_up(3000)
+        self.save_settings()
 
     def feed_pet(self):
         self.ai.last_fed = time.time()
+        self.ai.work_start_time = time.time() * 1000 # Reset work timer too
         self.ai.awake_until = 0 # No longer want to play if just fed
         # Briefly lick/clean before sleep (2 seconds)
         self.ai.set_state(State.CLEAN, duration=2000)
         self.ai.queued_state = State.SLEEP
+
+    def save_settings(self):
+        """Saves current kitten settings to a JSON file."""
+        settings = {
+            "behavior_mode": self.ai.mode.name
+        }
+        try:
+            settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
+            # If running as EXE, we might want to save in the user's local app data instead
+            # but for now let's use the folder next to the exe/script for portability.
+            with open(settings_path, "w") as f:
+                json.dump(settings, f)
+        except Exception as e:
+            print(f"Failed to save settings: {e}")
+
+    def load_settings(self):
+        """Loads kitten settings from a JSON file."""
+        try:
+            settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
+            if os.path.exists(settings_path):
+                with open(settings_path, "r") as f:
+                    settings = json.load(f)
+                    mode_name = settings.get("behavior_mode")
+                    if mode_name == "MOTIVATOR":
+                        self.ai.mode = BehaviorMode.STANDARD
+                    elif mode_name in BehaviorMode.__members__:
+                        self.ai.mode = BehaviorMode[mode_name]
+        except Exception as e:
+            print(f"Failed to load settings: {e}")
+
+    def get_last_input_time_ms(self):
+        """Returns the timestamp (ms) of the last user input (keyboard or mouse)."""
+        if sys.platform == "win32":
+            try:
+                import win32api
+                # GetTickCount() is roughly time.time() * 1000 but relative to system boot.
+                # However, GetLastInputInfo is also relative to system boot.
+                # To get a 'now' timestamp comparable to GetLastInputInfo, we use GetTickCount.
+                last_input_tick = win32api.GetLastInputInfo()
+                # We need to map this back to our current time.time() epoch if possible,
+                # but the AI just needs to know if it CHANGED. 
+                # Actually, AI uses time.time() for resets.
+                # Let's use a trick: 
+                import ctypes
+                millis = ctypes.windll.kernel32.GetTickCount()
+                idle_ms = millis - last_input_tick
+                return (time.time() * 1000) - idle_ms
+            except Exception:
+                return time.time() * 1000
+        elif sys.platform == "darwin":
+            try:
+                from Quartz import CGEventSourceSecondsSinceLastEventType, kCGEventSourceStateCombinedSessionState, kCGAnyInputEventType
+                idle_secs = CGEventSourceSecondsSinceLastEventType(kCGEventSourceStateCombinedSessionState, kCGAnyInputEventType)
+                return (time.time() - idle_secs) * 1000
+            except Exception:
+                return time.time() * 1000
+        return time.time() * 1000
+
+def log_exception(cls, exception, traceback):
+    import traceback as tb
+    error_msg = "".join(tb.format_exception(cls, exception, traceback))
+    with open("crash_report.txt", "a") as f:
+        f.write(f"\n--- Crash at {time.ctime()} ---\n")
+        f.write(error_msg)
+    print(error_msg)
+    sys.__excepthook__(cls, exception, traceback)
+
+sys.excepthook = log_exception
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
