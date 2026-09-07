@@ -24,10 +24,19 @@ jobs:
         include:
           - os: windows-latest
             platform: windows
+            arch: x64
             label: Windows
+          # macos-latest is Apple Silicon only, so Intel Macs need their own
+          # runner. macos-15-intel is the last x86_64 image Actions will offer
+          # (available until August 2027).
           - os: macos-latest
             platform: macos
-            label: macOS
+            arch: arm64
+            label: macOS (Apple Silicon)
+          - os: macos-15-intel
+            platform: macos
+            arch: x64
+            label: macOS (Intel)
 
     steps:
       - uses: actions/checkout@v7
@@ -61,8 +70,9 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path release | Out-Null
-          Compress-Archive -Path "dist/Desktop Kitten/*" -DestinationPath "release/DesktopKitten-windows.zip"
-          Compress-Archive -Path "dist/Desktop Snake/*"  -DestinationPath "release/DesktopSnake-windows.zip"
+          $suffix = "${{ matrix.platform }}-${{ matrix.arch }}"
+          Compress-Archive -Path "dist/Desktop Kitten/*" -DestinationPath "release/DesktopKitten-$suffix.zip"
+          Compress-Archive -Path "dist/Desktop Snake/*"  -DestinationPath "release/DesktopSnake-$suffix.zip"
 
       # ditto preserves the .app bundle's symlinks and permission bits, which
       # upload-artifact's own zipping would flatten and break.
@@ -70,12 +80,13 @@ jobs:
         if: matrix.platform == 'macos'
         run: |
           mkdir -p release
-          ditto -c -k --keepParent "dist/Desktop Kitten.app" "release/DesktopKitten-macos.zip"
-          ditto -c -k --keepParent "dist/Desktop Snake.app"  "release/DesktopSnake-macos.zip"
+          suffix="${{ matrix.platform }}-${{ matrix.arch }}"
+          ditto -c -k --keepParent "dist/Desktop Kitten.app" "release/DesktopKitten-$suffix.zip"
+          ditto -c -k --keepParent "dist/Desktop Snake.app"  "release/DesktopSnake-$suffix.zip"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: desktop-pets-${{ matrix.platform }}
+          name: desktop-pets-${{ matrix.platform }}-${{ matrix.arch }}
           path: release/*.zip
           if-no-files-found: error
           retention-days: 30

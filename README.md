@@ -54,9 +54,20 @@ Results land in `dist/` — a `.app` bundle on macOS, a folder containing the
 `.exe` on Windows.
 
 ### Automated builds
-The `Build` GitHub Actions workflow builds both pets for Windows and macOS on
-every push and pull request, and attaches the zipped results as run artifacts.
-Pushing a `v*` tag additionally publishes them to a GitHub Release.
+The `Build` GitHub Actions workflow builds both pets on every push and pull
+request and attaches the zipped results as run artifacts. Pushing a `v*` tag
+additionally publishes them to a GitHub Release.
+
+Six binaries are produced per run — each pet for each target:
+
+| Target | Runner | Suffix |
+| :--- | :--- | :--- |
+| Windows | `windows-latest` | `-windows-x64` |
+| macOS, Apple Silicon | `macos-latest` | `-macos-arm64` |
+| macOS, Intel | `macos-15-intel` | `-macos-x64` |
+
+macOS builds are unsigned, so Gatekeeper will quarantine them on download until
+an Apple Developer certificate is wired into the workflow.
 
 ### Auto-Start on Login (macOS)
 1.  Open **System Settings** > **General** > **Login Items**.

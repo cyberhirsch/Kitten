@@ -51,7 +51,7 @@ if sys.platform == 'darwin':
             'CFBundleShortVersionString': '1.0.0',
             'CFBundleName': 'Desktop Kitten',
             'CFBundleDisplayName': 'Desktop Kitten',
-            'LSMinimumSystemVersion': '10.13.0',
+            'LSMinimumSystemVersion': '11.0.0',
             'NSHighResolutionCapable': True,
             'LSUIElement': True,
         },
