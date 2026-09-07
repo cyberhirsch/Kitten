@@ -30,9 +30,9 @@ jobs:
             label: macOS
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -73,7 +73,7 @@ jobs:
           ditto -c -k --keepParent "dist/Desktop Kitten.app" "release/DesktopKitten-macos.zip"
           ditto -c -k --keepParent "dist/Desktop Snake.app"  "release/DesktopSnake-macos.zip"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-pets-${{ matrix.platform }}
           path: release/*.zip
@@ -88,7 +88,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true

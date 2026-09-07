@@ -95,7 +95,7 @@ def check_pet(pet, failures):
 
 
 def main():
-    app = QApplication(sys.argv)  # noqa: F841 - must outlive the widgets
+    app = QApplication(sys.argv)  # noqa: F841 - must outlive the widgets below
     failures = []
     for pet in PETS.values():
         check_pet(pet, failures)

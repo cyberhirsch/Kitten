@@ -371,18 +371,18 @@ class DesktopPet(QMainWindow):
             }
         """)
 
-        feed_action = QAction("Feed", self)
+        feed_action = QAction("Feed", menu)
         feed_action.triggered.connect(self.feed_pet)
         menu.addAction(feed_action)
         menu.addSeparator()
 
         # Behavior submenu
         behavior_menu = menu.addMenu("Behavior")
-        behavior_group = QActionGroup(self)
+        behavior_group = QActionGroup(behavior_menu)
         behavior_group.setExclusive(True)
         for mode, label in ((BehaviorMode.LAZY, "Lazy (Always Sleepy)"),
                             (BehaviorMode.STANDARD, "Standard (Hunger & Break Reminders)")):
-            action = QAction(label, self)
+            action = QAction(label, behavior_menu)
             action.setCheckable(True)
             action.setChecked(self.ai.mode == mode)
             action.triggered.connect(lambda checked, m=mode: self.set_behavior_mode(m))
@@ -392,10 +392,10 @@ class DesktopPet(QMainWindow):
         # Colour submenu, only for pets that ship more than one sheet
         if len(self.pet.variants) > 1:
             color_menu = menu.addMenu("Color")
-            color_group = QActionGroup(self)
+            color_group = QActionGroup(color_menu)
             color_group.setExclusive(True)
             for variant in self.pet.variants:
-                action = QAction(variant.label, self)
+                action = QAction(variant.label, color_menu)
                 action.setCheckable(True)
                 action.setChecked(variant.id == self.variant.id)
                 action.triggered.connect(lambda checked, v=variant: self.set_variant(v))
@@ -403,7 +403,7 @@ class DesktopPet(QMainWindow):
                 color_menu.addAction(action)
 
         menu.addSeparator()
-        close_action = QAction("Close", self)
+        close_action = QAction("Close", menu)
         close_action.triggered.connect(QApplication.instance().quit)
         menu.addAction(close_action)
 
@@ -411,6 +411,11 @@ class DesktopPet(QMainWindow):
             menu.exec(pos)
         except Exception as e:
             print(f"Context menu error: {e}")
+        finally:
+            # The menu is parented to the window, so without this every
+            # right-click would leak a menu and its actions for the life of
+            # the process - and this app is meant to run for days.
+            menu.deleteLater()
 
     def set_behavior_mode(self, mode):
         self.ai.mode = mode
@@ -521,5 +526,5 @@ def run(pet):
         except ImportError:
             pass
 
-    window = DesktopPet(pet)
+    window = DesktopPet(pet)  # noqa: F841 - must stay referenced for the app's lifetime
     return app.exec()
