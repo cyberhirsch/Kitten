@@ -1,0 +1,104 @@
+name: Build
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            label: Windows
+          - os: macos-latest
+            platform: macos
+            label: macOS
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Qt's offscreen platform plugin needs no display, so the real game loop
+      # runs on the runner. Catches broken spritesheet coordinates and AI
+      # regressions before we spend time packaging them.
+      - name: Smoke test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python tests/smoke_test.py
+
+      - name: Build Desktop Kitten
+        run: pyinstaller --noconfirm --clean "Desktop Kitten.spec"
+
+      - name: Build Desktop Snake
+        run: pyinstaller --noconfirm --clean "Desktop Snake.spec"
+
+      - name: Package (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Compress-Archive -Path "dist/Desktop Kitten/*" -DestinationPath "release/DesktopKitten-windows.zip"
+          Compress-Archive -Path "dist/Desktop Snake/*"  -DestinationPath "release/DesktopSnake-windows.zip"
+
+      # ditto preserves the .app bundle's symlinks and permission bits, which
+      # upload-artifact's own zipping would flatten and break.
+      - name: Package (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          mkdir -p release
+          ditto -c -k --keepParent "dist/Desktop Kitten.app" "release/DesktopKitten-macos.zip"
+          ditto -c -k --keepParent "dist/Desktop Snake.app"  "release/DesktopSnake-macos.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-pets-${{ matrix.platform }}
+          path: release/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            artifacts/*.zip

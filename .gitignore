@@ -1,6 +1,8 @@
 dist/
 build/
 *.spec
+!/Desktop Kitten.spec
+!/Desktop Snake.spec
 __pycache__/
 *.pyc
 ITCH_IO_DESCRIPTION*

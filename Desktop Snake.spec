@@ -1,10 +1,10 @@
 import sys
 
 a = Analysis(
-    ['main.py'],
+    ['snake.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets/spritesheet.png', 'assets'), ('assets/purr.mp3', 'assets')],
+    datas=[('assets/snakes', 'assets/snakes')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -20,7 +20,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Desktop Kitten',
+    name='Desktop Snake',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -39,18 +39,18 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='Desktop Kitten',
+    name='Desktop Snake',
 )
 if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
-        name='Desktop Kitten.app',
+        name='Desktop Snake.app',
         icon=None,
-        bundle_identifier='com.cyberhirsch.desktop-kitten',
+        bundle_identifier='com.cyberhirsch.desktop-snake',
         info_plist={
             'CFBundleShortVersionString': '1.0.0',
-            'CFBundleName': 'Desktop Kitten',
-            'CFBundleDisplayName': 'Desktop Kitten',
+            'CFBundleName': 'Desktop Snake',
+            'CFBundleDisplayName': 'Desktop Snake',
             'LSMinimumSystemVersion': '10.13.0',
             'NSHighResolutionCapable': True,
             'LSUIElement': True,
