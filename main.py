@@ -11,6 +11,7 @@ import ctypes
 from engine.sprite_engine import SpriteEngine
 from engine.pet_ai import PetAI, State, BehaviorMode
 from engine.window_helper import get_collidable_windows
+from engine.paths import user_data_file, legacy_settings_path
 import json
 
 ANIMATIONS_CONFIG = {
@@ -423,10 +424,7 @@ class DesktopPet(QMainWindow):
             "behavior_mode": self.ai.mode.name
         }
         try:
-            settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
-            # If running as EXE, we might want to save in the user's local app data instead
-            # but for now let's use the folder next to the exe/script for portability.
-            with open(settings_path, "w") as f:
+            with open(user_data_file("settings.json"), "w") as f:
                 json.dump(settings, f)
         except Exception as e:
             print(f"Failed to save settings: {e}")
@@ -434,7 +432,12 @@ class DesktopPet(QMainWindow):
     def load_settings(self):
         """Loads kitten settings from a JSON file."""
         try:
-            settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
+            settings_path = user_data_file("settings.json")
+            if not os.path.exists(settings_path):
+                # Migrate settings written by older builds next to the script
+                legacy = legacy_settings_path()
+                if os.path.exists(legacy):
+                    settings_path = legacy
             if os.path.exists(settings_path):
                 with open(settings_path, "r") as f:
                     settings = json.load(f)
@@ -477,7 +480,7 @@ class DesktopPet(QMainWindow):
 def log_exception(cls, exception, traceback):
     import traceback as tb
     error_msg = "".join(tb.format_exception(cls, exception, traceback))
-    with open("crash_report.txt", "a") as f:
+    with open(user_data_file("crash_report.txt"), "a") as f:
         f.write(f"\n--- Crash at {time.ctime()} ---\n")
         f.write(error_msg)
     print(error_msg)

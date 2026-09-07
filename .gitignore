@@ -1,7 +1,10 @@
-﻿dist/
+dist/
 build/
 *.spec
 __pycache__/
 *.pyc
 ITCH_IO_DESCRIPTION*
 images/
+.DS_Store
+settings.json
+crash_report.txt

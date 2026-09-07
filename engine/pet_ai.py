@@ -193,11 +193,18 @@ class PetAI:
         if self.state == State.SLEEP:
             self.set_state(State.IDLE, duration=1000)
 
-    def set_state(self, new_state, duration=random.randint(2000, 5000)):
+
+    def set_state(self, new_state, duration=None):
+        # NOTE: duration must default to None, not random.randint(...). A call-time
+        # default is evaluated once at import, which would freeze every "random"
+        # state duration to a single value for the whole process lifetime.
+        if duration is None:
+            duration = random.randint(2000, 5000)
+
         self.state = new_state
         self.state_end_time = time.time() * 1000 + duration
         self.frame_idx = 0
-        
+
         # Map state to animation name
         if self.state == State.FALL:
             self.current_anim = "CARRY_FALL"
@@ -206,83 +213,82 @@ class PetAI:
         else:
             self.current_anim = self.state.name
 
+    def _idle_weights(self, is_awake):
+        """Weighted state table for the current mode. Never returns an empty dict."""
+        if self.mode == BehaviorMode.STANDARD:
+            weights = {
+                State.IDLE: 25,
+                State.LOOK_SIDE: 15,
+                State.WALK: 30,
+                State.LICK: 10,
+                State.CLEAN: 10,
+                State.SLEEP: 10,  # Rare naps in standard mode
+            }
+        elif is_awake:
+            # Lazy, but recently petted/moved -> playful
+            weights = {
+                State.IDLE: 15,
+                State.LOOK_SIDE: 15,
+                State.WALK: 30,
+                State.RUN: 10,
+                State.LICK: 10,
+                State.CLEAN: 10,
+                State.PLAY: 10,
+            }
+        else:
+            # Lazy default
+            weights = {
+                State.IDLE: 20,
+                State.LOOK_SIDE: 5,
+                State.WALK: 5,
+                State.SLEEP: 60,
+                State.LICK: 5,
+                State.CLEAN: 5,
+            }
+
+        return weights
+
+    def _sleep_duration(self):
+        if self.mode == BehaviorMode.STANDARD:
+            # Short power naps while the work timer matters
+            return random.randint(30000, 120000)
+        # Lazy naps run from 1 to 10 minutes
+        return random.randint(60000, 600000)
+
     def choose_next_state(self):
         if self.queued_state:
             next_s = self.queued_state
             self.queued_state = None
-            duration = random.randint(30000, 600000) if next_s == State.SLEEP else random.randint(2000, 5000)
+            duration = self._sleep_duration() if next_s == State.SLEEP else random.randint(2000, 5000)
             self.set_state(next_s, duration=duration)
             return
 
         now = time.time() * 1000
         is_awake = now < self.awake_until
 
-        if self.mode == BehaviorMode.LAZY:
-            if is_awake:
-                # Playful/Active weights
-                weights = {
-                    State.IDLE: 15,
-                    State.LOOK_SIDE: 15,
-                    State.WALK: 30,
-                    State.RUN: 10,
-                    State.LICK: 10,
-                    State.CLEAN: 10,
-                    State.PLAY: 10
-                }
-            else:
-                # Lazy/Sleepy weights
-                weights = {
-                    State.IDLE: 20,
-                    State.LOOK_SIDE: 5,
-                    State.WALK: 5,
-                    State.SLEEP: 60,
-                    State.LICK: 5,
-                    State.CLEAN: 5
-                }
-        elif self.mode == BehaviorMode.STANDARD:
+        next_s = None
+        duration = None
+
+        # Motivator nudges take priority over the random weight table.
+        if self.mode == BehaviorMode.STANDARD:
             hungry = self.is_hungry()
-            now = time.time() * 1000
             work_duration = now - self.work_start_time if (self.is_working and self.work_start_time > 0) else 0
-            
-            # Motivator Phases (Combined with hunger)
-            # Phase 2: Running (50m+) or very hungry
-            if work_duration > 3000000 or (hungry and random.random() < 0.3): 
+
+            # Phase 2: 50m+ at the desk, or very hungry -> run around
+            if work_duration > 3000000 or (hungry and random.random() < 0.3):
                 next_s = State.RUN
                 duration = random.randint(5000, 10000)
-            # Phase 1: Walking (45m+) or generally hungry
+            # Phase 1: 45m+ at the desk, or generally hungry -> pace about
             elif work_duration > 2700000 or hungry:
                 next_s = State.WALK
                 duration = random.randint(3000, 7000)
-            else:
-                # Normal behavior while working or just hanging out
-                weights = {
-                    State.IDLE: 25,
-                    State.LOOK_SIDE: 15,
-                    State.WALK: 30,
-                    State.LICK: 10,
-                    State.CLEAN: 10,
-                    State.SLEEP: 10 # Rare naps in standard mode
-                }
-                states = list(weights.keys())
-                probs = list(weights.values())
-                next_s = random.choices(states, weights=probs)[0]
-                duration = random.randint(2000, 5000)
-                if next_s == State.SLEEP:
-                    duration = random.randint(30000, 120000)
-        else:
-            # Fallback
-            weights = {State.IDLE: 100}
-            
-        states = list(weights.keys())
-        probs = list(weights.values())
-        next_s = random.choices(states, weights=probs)[0]
-        
-        # Determine duration
-        duration = random.randint(2000, 5000)
-        if next_s == State.SLEEP:
-            # Nap can last up to 10 minutes (600,000 ms), minimum 1 minute
-            duration = random.randint(60000, 600000)
-        elif next_s in [State.WALK, State.RUN]:
+
+        if next_s is None:
+            weights = self._idle_weights(is_awake)
+            next_s = random.choices(list(weights.keys()), weights=list(weights.values()))[0]
+            duration = self._sleep_duration() if next_s == State.SLEEP else random.randint(2000, 5000)
+
+        if next_s in (State.WALK, State.RUN):
             self.direction = random.choice(["left", "right"])
-            
+
         self.set_state(next_s, duration=duration)
