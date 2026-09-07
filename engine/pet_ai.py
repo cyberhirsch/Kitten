@@ -22,7 +22,14 @@ class BehaviorMode(Enum):
     STANDARD = auto()  # Gets hungry and reminds user to take breaks (Work Timer)
 
 class PetAI:
-    def __init__(self, start_x, start_y):
+    def __init__(self, start_x, start_y, pet=None):
+        # `pet` is an engine.pets.PetDefinition. It supplies the sprite footprint,
+        # the movement speeds and which states this species is actually able to
+        # perform (the snake sheet, for example, has no lick or jump frames).
+        self.pet = pet
+        self.frame_size = pet.frame_size if pet else 128
+        self.allowed_states = set(pet.allowed_states) if pet else set(State)
+
         self.x = start_x
         self.y = start_y
         self.vx = 0
@@ -42,9 +49,9 @@ class PetAI:
         self.state_end_time = 0
         
         # Physics constants
-        self.gravity = 0.5
-        self.walk_speed = 2
-        self.run_speed = 4
+        self.gravity = pet.gravity if pet else 0.5
+        self.walk_speed = pet.walk_speed if pet else 2
+        self.run_speed = pet.run_speed if pet else 4
         self.last_reaction_time = 0
         
         # Motivator system
@@ -96,16 +103,16 @@ class PetAI:
         # Find current floor (closest below cat)
         current_floor = 100000 
         for f in floors:
-            # We check if floor is below the cat's belly (y + 100)
-            if f >= self.y + 100: 
+            # We check if the floor is below the pet's belly
+            if f >= self.y + self.frame_size - 28:
                 if f < current_floor:
                     current_floor = f
         
         # Gravity
         on_ground = False
         if self.state != State.CARRY:
-            # 128 is the bottom of the sprite
-            if self.y + 128 < current_floor - 2: # Add small epsilon to avoid jitter
+            # Bottom edge of the sprite
+            if self.y + self.frame_size < current_floor - 2: # Add small epsilon to avoid jitter
                 self.vy += self.gravity
                 if self.state != State.JUMP and self.state != State.FALL:
                     self.set_state(State.FALL)
@@ -120,7 +127,7 @@ class PetAI:
                         self.set_state(State.IDLE)
                 
                 # Snap to floor
-                self.y = current_floor - 128
+                self.y = current_floor - self.frame_size
                 self.vy = 0
 
         # Jump/Play Trigger
@@ -128,8 +135,9 @@ class PetAI:
         if on_ground and self.state not in [State.SLEEP, State.CARRY, State.JUMP, State.LANDING, State.EMOTE, State.PLAY]:
             if mouse_pos:
                 mx, my = mouse_pos
-                dx = mx - (self.x + 64)
-                dy = my - (self.y + 64)
+                half = self.frame_size // 2
+                dx = mx - (self.x + half)
+                dy = my - (self.y + half)
                 dist = (dx**2 + dy**2)**0.5
                 
                 # Check if mouse is in front and near ground level (dy 20-80)
@@ -137,10 +145,10 @@ class PetAI:
                 near_ground = 20 < dy < 80
                 
                 if in_front and near_ground:
-                    if dist < 40:
-                        # Almost touching ground near cat - Play! (No cooldown)
+                    if dist < 40 and State.PLAY in self.allowed_states:
+                        # Almost touching ground near the pet - Play! (No cooldown)
                         self.set_state(State.PLAY, duration=720) # 6 frames * 120ms
-                    elif dist < 80:
+                    elif dist < 80 and State.JUMP in self.allowed_states:
                         # A bit further out - Jump! (With 10s cooldown)
                         if now - self.last_reaction_time > 10000:
                             self.last_reaction_time = now
@@ -166,16 +174,16 @@ class PetAI:
             if self.state in [State.WALK, State.RUN]:
                 self.set_state(State.IDLE, duration=2000)
                 self.direction = "right"
-        elif self.x > v_right - 128:
-            self.x = v_right - 128
+        elif self.x > v_right - self.frame_size:
+            self.x = v_right - self.frame_size
             if self.state in [State.WALK, State.RUN]:
                 self.set_state(State.IDLE, duration=2000)
                 self.direction = "left"
         
         # Absolute bottom clamp (safety fallback)
         # Use a 5px buffer to avoid fighting with the floor logic
-        if self.y > v_bottom + 5 - 128:
-            self.y = v_bottom + 5 - 128
+        if self.y > v_bottom + 5 - self.frame_size:
+            self.y = v_bottom + 5 - self.frame_size
             self.vy = 0
         
         # Stop at top of virtual desktop
@@ -246,7 +254,8 @@ class PetAI:
                 State.CLEAN: 5,
             }
 
-        return weights
+        weights = {s: w for s, w in weights.items() if s in self.allowed_states}
+        return weights or {State.IDLE: 1}
 
     def _sleep_duration(self):
         if self.mode == BehaviorMode.STANDARD:
